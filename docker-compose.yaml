@@ -1,0 +1,185 @@
+services:
+  nessie:
+    image: projectnessie/nessie:latest
+    container_name: nessie
+    ports:
+      - 19120:19120
+    volumes:
+      - nessie-data:/var/lib/nessie
+    environment:
+      - QUARKUS_PROFILE=mongodb
+      - QUARKUS_MONGODB_CONNECTION_STRING=mongodb://admin:admin@nessie-mongodb:27017
+      - QUARKUS_MONGODB_DATABASE=nessie
+    depends_on:
+      - nessie-mongodb
+    networks:
+      - lakehouse
+
+  nessie-mongodb:
+    image: mongo:latest
+    container_name: nessie-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGO_INITDB_DATABASE: nessie
+    volumes:
+      - nessie-mongodb-data:/data/db
+    networks:
+      - lakehouse
+
+  dremio:
+    platform: linux/x86_64
+    image: dremio/dremio-oss:latest
+    ports:
+      - 9047:9047
+      - 31010:31010
+      - 32010:32010
+    container_name: dremio
+    environment:
+      - DREMIO_JAVA_SERVER_EXTRA_OPTS=-Dpaths.dist=file:///opt/dremio/data/dist
+    volumes:
+      - dremio-data:/opt/dremio/data
+    networks:
+      - lakehouse
+
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server --console-address ":9001" /data
+    container_name: minio
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+    networks:
+      - lakehouse
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - lakehouse
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - lakehouse
+
+  spark:
+    image: bitnami/spark:latest
+    container_name: spark
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - 8080:8080
+      - 7077:7077
+    volumes:
+      - spark-data:/bitnami/spark
+    networks:
+      - lakehouse
+
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+    depends_on:
+      - spark
+    volumes:
+      - spark-worker-data:/bitnami/spark
+    networks:
+      - lakehouse
+
+  superset:
+    build:
+      context: ./docker/superset
+      dockerfile: Dockerfile
+    container_name: superset
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_ENV: production
+      SUPERSET_LOAD_EXAMPLES: "no"
+      SUPERSET_SECRET_KEY: 'your_secret_key'
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://superset:superset@superset-db:5432/superset
+      REDIS_HOST: superset-redis
+      REDIS_PORT: 6379
+    volumes:
+      - superset-data:/app/superset_home
+    depends_on:
+      - superset-db
+      - superset-redis
+    networks:
+      - lakehouse
+
+  superset-db:
+    image: postgres:13
+    container_name: superset_db
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+    volumes:
+      - superset-db-data:/var/lib/postgresql/data
+    networks:
+      - lakehouse
+
+  superset-redis:
+    image: redis:latest
+    container_name: superset_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - superset-redis-data:/data
+    networks:
+      - lakehouse
+
+  jupyterhub:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyterhub
+    ports:
+      - 8888:8888
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    volumes:
+      - jupyterhub-data:/home/jovyan/work
+    command: start-notebook.sh --NotebookApp.token=''
+    networks:
+      - lakehouse
+
+networks:
+  lakehouse:
+    driver: bridge
+
+volumes:
+  nessie-data:
+  dremio-data:
+  minio-data:
+  spark-data:
+  spark-worker-data:
+  jupyterhub-data:
+  mongodb-data:
+  nessie-mongodb-data:
+  postgres-data:
+  superset-data:
+  superset-db-data:
+  superset-redis-data:

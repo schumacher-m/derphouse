@@ -1,0 +1,4 @@
+data/movie_dataset/
+./data/**/*.csv
+archive
+.DS_Store
