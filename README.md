@@ -10,7 +10,7 @@
 
 ### First Time Tasks
 
-In order to bootstrap superset you need to migrate the DB and create a initial admin user:
+In order to bootstrap superset you need to migrate the DB and create an initial admin user:
 
 ```
 docker-compose exec superset superset db upgrade
